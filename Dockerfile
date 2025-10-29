@@ -1,11 +1,23 @@
-FROM ubuntu:22.04 as base
+FROM ubuntu:22.04 AS base
 WORKDIR /workdir
 
-ARG sdk_nrf_branch=v2.9-branch
-ARG toolchain_version=v2.9.0
-ARG sdk_nrf_commit
-ARG NORDIC_COMMAND_LINE_TOOLS_VERSION="10-24-0/nrf-command-line-tools-10.24.0"
-ARG arch=amd64
+# Set to 1 to create a slim version of the image.  This will remove unnecessary
+# files to reduce the size of the image.
+ARG SLIM=0
+
+# Select tag from:
+#   https://github.com/nrfconnect/sdk-nrf/tags
+ARG SDK_NRF_BRANCH=v3.1.1
+
+# Select branch from output of running 'nrfutil toolchain-manager search'.
+# When this is changed, you also need to change ${TOOLCHAIN_ID} below.
+ARG TOOLCHAIN_VERSION=v3.1.1
+
+# Select by examining the download link for the *.tar.gz file for the Linux x86 64 version:
+#   https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools/Download?lang=en#infotabs
+ARG NORDIC_COMMAND_LINE_TOOLS_VERSION="10-24-2/nrf-command-line-tools-10.24.2"
+
+ARG ARCH=amd64
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -17,6 +29,8 @@ RUN <<EOT
     apt-get -y update
     apt-get -y upgrade
     apt-get -y install wget unzip clang-format gcc-multilib make libffi7
+    # Install command line tool to inspect disk usage
+    apt-get -y install ncdu
     apt-get -y clean
     rm -rf /var/lib/apt/lists/*
 EOT
@@ -25,31 +39,51 @@ EOT
 # Make nrfutil install in a shared location, because when used with GitHub
 # Actions, the image will be launched with the home dir mounted from the local
 # checkout.
+#
+# After installation, remove unnecessary files
 ENV NRFUTIL_HOME=/usr/local/share/nrfutil
+# This needs to be updated if ${TOOLCHAIN_VERSION} is changed.
+ARG TOOLCHAIN_ID=b2ecd2435d
+ENV TOOLCHAIN_PY=/root/ncs/toolchains/${TOOLCHAIN_ID}/usr/local
+
 RUN <<EOT
     wget -q https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
     mv nrfutil /usr/local/bin
     chmod +x /usr/local/bin/nrfutil
     nrfutil install toolchain-manager
-    nrfutil install toolchain-manager search
-    nrfutil toolchain-manager install --ncs-version ${toolchain_version}
+    nrfutil toolchain-manager install --ncs-version ${TOOLCHAIN_VERSION}
     nrfutil toolchain-manager list
+    # Remove any downloaded files
     rm -f /root/ncs/downloads/*
+    if [ "${SLIM}" -ne 0 ]; then
+        # Remove toolchains for non-arm archs
+        rm -rf /root/ncs/toolchains/*/opt/zephyr-sdk/{riscv64-zephyr-elf,x86_64-zephyr-elf,arc-zephyr-elf,nios2-zephyr-elf,sparc-zephyr-elf,mips-zephyr-elf}
+        # Remove files from Nordic setup
+        rm -rf /root/ncs/toolchains/*/var
+        # Remove unnecessary python packages
+        PYTHON_BIN="${TOOLCHAIN_PY}/bin/python3"
+        # Need to set the LD_LIBRARY_PATH to get python3 to run
+        export LD_LIBRARY_PATH="${TOOLCHAIN_PY}/lib"
+        # Packages to uninstall (not needed for CI firmware builds)
+        $PYTHON_BIN -m pip uninstall -y pygments pillow lxml mypy capstone pyocd cmsis_pack_manager typecode numpy
+        # Remove large files not installed by pip3
+        rm -rf grpc grpc_tools licensedcode pdfminer
+    fi
 EOT
 
 #
 # ClangFormat
 #
 RUN <<EOT
-    wget -qO- https://raw.githubusercontent.com/nrfconnect/sdk-nrf/${sdk_nrf_branch}/.clang-format > /workdir/.clang-format
+    wget -qO- https://raw.githubusercontent.com/nrfconnect/sdk-nrf/${SDK_NRF_BRANCH}/.clang-format > /workdir/.clang-format
 EOT
 
 # Nordic command line tools
 # Releases: https://www.nordicsemi.com/Products/Development-tools/nrf-command-line-tools/download
 RUN <<EOT
     NCLT_BASE=https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/desktop-software/nrf-command-line-tools/sw/versions-10-x-x
-    echo "Host architecture: $arch"
-    case $arch in
+    echo "Host architecture: $ARCH"
+    case $ARCH in
         "amd64")
             NCLT_URL="${NCLT_BASE}/${NORDIC_COMMAND_LINE_TOOLS_VERSION}_linux-amd64.tar.gz"
             ;;
@@ -61,28 +95,35 @@ RUN <<EOT
     if [ ! -z "$NCLT_URL" ]; then
         mkdir tmp && cd tmp
         wget -qO - "${NCLT_URL}" | tar --no-same-owner -xz
-        # Install included JLink
-        mkdir /opt/SEGGER
-        tar xzf JLink_*.tgz -C /opt/SEGGER
-        mv /opt/SEGGER/JLink* /opt/SEGGER/JLink
+        if [ "${SLIM}" -eq 0 ]; then
+            # Install included JLink
+            mkdir /opt/SEGGER
+            tar xzf JLink_*.tgz -C /opt/SEGGER
+            mv /opt/SEGGER/JLink* /opt/SEGGER/JLink
+        fi
         # Install nrf-command-line-tools
         cp -r ./nrf-command-line-tools /opt
         ln -s /opt/nrf-command-line-tools/bin/nrfjprog /usr/local/bin/nrfjprog
         ln -s /opt/nrf-command-line-tools/bin/mergehex /usr/local/bin/mergehex
         cd .. && rm -rf tmp ;
     else
-        echo "Skipping nRF Command Line Tools (not available for $arch)" ;
+        echo "Skipping nRF Command Line Tools (not available for $ARCH)" ;
     fi
 EOT
 
 # Prepare image with a ready to use build environment
 SHELL ["nrfutil","toolchain-manager","launch","/bin/bash","--","-c"]
 RUN <<EOT
-    west init -m https://github.com/nrfconnect/sdk-nrf --mr ${sdk_nrf_branch} .
-    if [[ $sdk_nrf_commit =~ "^[a-fA-F0-9]{32}$" ]]; then
-        git checkout ${sdk_nrf_commit};
-    fi
+    west init -m https://github.com/nrfconnect/sdk-nrf --mr ${SDK_NRF_BRANCH} .
     west update --narrow -o=--depth=1
+    if [ "${SLIM}" -ne 0 ]; then
+        # Remove large NCS modules that we're not using
+        rm -rf /workdir/modules/lib/matter /workdir/modules/lib/gui
+        # Remove documentation and examples.  Samples are kept since that's where
+        # the bootloader lives.  Tests are kept since they have some .defconfigs
+        # that are included in the build and must exist.
+        find . -type d \( -iname "example*" -o -iname "doc*" \) -prune -exec rm -rf {} +
+    fi
 EOT
 
 # Launch into build environment with the passed arguments
