@@ -31,7 +31,7 @@ jobs:
           docker build -t ncs-${{ matrix.description }}:${{ matrix.SDK }} \
             --build-arg SDK_NRF_BRANCH=${{ matrix.SDK }} \
             --build-arg TOOLCHAIN_VERSION=${{ matrix.TOOLCHAIN }} \
-            --build-arg SLIM=${{ matrix.SLIM }}
+            --build-arg SLIM=${{ matrix.SLIM }} \
             .
 
       - name: Build connectivity_bridge application
