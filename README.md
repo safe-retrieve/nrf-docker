@@ -1,26 +1,14 @@
-> [!TIP]
-> The recommended way of building nRF Connect projects in CI is to use the [Zephyr Docker images](https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci#zephyr-docker-images).  
-> Example 1: [hello.nrfcloud.com/firmware](https://github.com/hello-nrfcloud/firmware/blob/4626d2a97b1414095b5b66032931e3f4af1017ce/.github/workflows/build.yml#L59)  
-> Example 2: [ZSWatch firmware](https://github.com/jakkra/ZSWatch/blob/81adcb962e359b7da0557a631654334c0ccd22e1/.github/workflows/build.yml#L6)
+# Introduction
 
-# Dockerfile example for building nRF Connect SDK applications on GitHub Actions
+This is a fork of the [Nordicplayground/nrf-docker](https://github.com/NordicPlayground/nrf-docker) repo.
 
-![Publish Docker](https://github.com/NordicPlayground/nrf-docker/workflows/Publish%20Docker/badge.svg?branch=saga)
-(_the [Docker image](https://hub.docker.com/r/nordicplayground/nrfconnect-sdk) is build against [nRF Connect SDK](https://github.com/nrfconnect/sdk-nrf) the last 5 release branches every night._)
+It is used to create the Docker image used for the CI build of the [SkyShepherd GEN3 hardware](https://github.com/safe-retrieve/sky-shepherd-firmware-v2).
 
-![Docker + Zephyr -> merged.hex](./diagram.png)
+The repo was forked so that we could continue to update to the latest nRF Connect SDK version.
 
-This project defines a Docker image that contains all dependencies to run `west` commands with the nRF Connect SDK. Bind mount the project folder you'd like to build, and the output will end up in the same folder (nested in build/b0/zephyr subdir of the app).
+The image create is reduced in size by removing some packages and modules that are not currently used for a CI build.  The size of the reduced image is about 4.68GB while a full image is 7.27GB.
 
-The aim is to provide an example for a Docker image that can compile application and samples in a [nRF Connect SDK](https://github.com/nrfconnect/sdk-nrf) release branch, not to exactly replicate the software configuration used when the release was made.
-
-More specificially, the purpose of this project is _not_ to provide stable images, but replicate what users are facing when they start developing with nRF Connect SDK (which itself does not provide a reproducible build environment). This is mitigated by the [Toolchain Manager](https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/installation/assistant.html#install-toolchain-manager), which is available for command line usage.
-
-However, provisioning an environment with the toolchain and an updated west environment still takes considerable time (around 10 minutes). Especially with matrix builds this will quickly add up. Therefore this project shows how to dockerize a ready-to-use `west build` command.
-
-If you want stable Docker images or have custom needs, use the [Dockerfile](./Dockerfile) in this repository as an example to build your own Docker image.
-
-For Zephyr applications, check out the [Zephyr Docker images](https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci#zephyr-docker-images).
+It can also be used to build images locally.  The reduced image does not include the JLink tools to flash images to a board.
 
 ## Setup
 
@@ -33,68 +21,67 @@ You can either build the image from this repository or use a pre-built one from 
 Clone the repo:
 
 ```bash
-git clone https://github.com/NordicPlayground/nrf-docker
+git clone https://github.com/safe-retrieve/nrf-docker
 ```
 
-Build the image (this is only needed once):
+Build the full image with the defaults (this is only needed once):
 
 ```bash
 cd nrf-docker
-docker build -t nrfconnect-sdk --build-arg sdk_nrf_version=v2.9-branch .
+docker build -t ncs-full:v3.1.1 .
 ```
 
-> [!NOTE]
-> To build for a Mac with the M1 architecture, you need to specify the `arm64` architecture when building: `--build-arg arch=arm64`.
+Build the slim image with the defaults (this is only needed once):
 
-> [!NOTE]
-> The `sdk_nrf_version` build argument can be used to specify what version of the nRF Connect SDK that will be used when looking up dependencies with pip for the SDK and it's west dependency repositories. The value can be a git _tag_, _branch_ or _sha_ from the [nRF Connect SDK repository](https://github.com/nrfconnect/sdk-nrf).
+```bash
+cd nrf-docker
+docker build -t ncs-slim:v3.1.1 --build-arg SLIM=1 .
+```
+
+The following arguments are supported by the Dockerfile:
+|Argument|Description|
+|:-------|:----------|
+| SLIM                              | Set to 1 to produce a slimmer version of the image.  <br>Defaults to `0`.|
+| SDK_NRF_BRANCH                    | Set to the branch or tag to use for the nRF Connect SDK version.<br>Defaults to `v3.1.1`.|
+| TOOLCHAIN_VERSION                 | Set to the toolchain version to install.  This is a value from the output of `nrfutil toolchain-manager search`.<br>Defaults to `v3.1.1`.<br>Note: Changing this value also requires a change to **TOOLCHAIN_ID**.|
+| TOOLCHAIN_ID                      | Set to the bundle ID of the toolchain.  This value can be found by inspecting `toolchains.json` in an installed system.<br>Defaults to `b2ecd2435d`.<br>Note: Changing this value also requires a change to **TOOLCHAIN_VERSION**. |
+| NORDIC_COMMAND_LINE_TOOLS_VERSION | Set to the partial name of the tarball for the [Nordic Command Line tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools/Download?lang=en#infotabs).<br>Defaults to `10-24-2/nrf-command-line-tools-10.24.2`.|
+| ARCH                              | Set to the host architecture that will be running the image.<br>Defaults to `amd64`.<br>Note: If building to run on a Mac with the M1 architecture, you need to set this value to `arm64`.|
 
 ### Use pre-built image from Dockerhub
 
-> [!NOTE]
-> This is a convenient way to quickly build your firmware but using images from untrusted third-parties poses the risk of exposing your source code.
-> There is no guarantee (e.g. cryptographic signature) about what this image contains.
-> When publishing the image this project only ensures through automation that it can be used to build nRF Connect SDK examples.
-> The entire image creation and publication is automated (build on GitHub Actions, and served by Dockerhub), which means there are multiple systems that can be compromised, during and after publication.
-> No human is involved in verifying the image.
-> In addition Docker images are not deterministic.
-> At build time, dependencies are fetched from third-party sources and installed. These dependencies could also contain malicious code.
-> If you are using this image you must be aware that you are using software from many untrusted sources with all the consequences that brings.
-
-> [!NOTE]
-> The prebuilt images are only available for `amd64` architecture (Linux).
-
-Pre-built images are available as [`nordicplayground/nrfconnect-sdk`](https://hub.docker.com/r/nordicplayground/nrfconnect-sdk).
+Pre-built images are available as [`saferetrieve/ncs`](https://hub.docker.com/r/saferetrieve/ncs).
 
 ```bash
-docker run --rm -v ${PWD}:/workdir/project nordicplayground/nrfconnect-sdk:v2.9-branch ...
+docker run --rm -v ${PWD}:/workdir/project saferetrieve/ncs:v3.1.1 ...
 ```
 
-The rest of the documentation will use the local name `nrfconnect-sdk`, but any of them can use `nordicplayground/nrfconnect-sdk:v2.9-branch` instead.
+The rest of the documentation will use the local name `ncs-full`, but any of them can use `saferetrieve/ncs-full:v3.1.1` instead.
 
 ### Build the firmware
 
-To demonstrate, we'll build the _asset_tracker_v2_ application from the nRF Connect SDK:
+To demonstrate, we'll build the connectivity_bridge application from the nRF Connect SDK:
 
 ```bash
 docker run --rm \
     -v ${PWD}:/workdir/project \
-    -w /workdir/nrf/applications/asset_tracker_v2 \
-    nrfconnect-sdk \
-    west build -p always -b nrf9160dk_nrf9160_ns --build-dir /workdir/project/build
+    -w /workdir/nrf/applications/connectivity_bridge \
+    ncs-full \
+    west build -b thingy91/nrf52840 --build-dir /workdir/project/build -- -DEXTRA_CFLAGS="-Werror -Wno-dev"
+
 ```
 
-The firmware file will be located here: `nrf/applications/asset_tracker_v2/build/b0/zephyr/merged.hex`. Because it's inside the folder that is bind mounted when running the image, it is also available outside of the Docker image.
+The firmware file will be located here: `nrf/applications/connectivity_bridge/build/b0/zephyr/merged.hex`. Because it's inside the folder that is bind mounted when running the image, it is also available outside of the Docker image.
 
 > [!NOTE]
 > The `-p always` build argument is to do a pristine build. It is similar to cleaning the build folder and is used because it is less error-prone to a previous build with different configuration. To speed up subsequent build with the same configuration you can remove this argument to avoid re-building code that haven't been modified since the previous build.
 
-To build a stand-alone project, replace `-w /workdir/nrf/applications/asset_tracker_v2` with the name of the applications folder inside the docker container:
+To build a stand-alone project, replace `-w /workdir/nrf/applications/connectivity_bridge` with the name of the applications folder inside the docker container:
 
 ```bash
 # run from the build-with-nrf-connect-sdk
 docker run --rm -v ${PWD}:/workdir/project \
-    nrfconnect-sdk \
+    ncs-full \
     west build -p always -b nrf9160dk_nrf9160_ns\
 ```
 
@@ -102,9 +89,9 @@ docker run --rm -v ${PWD}:/workdir/project \
 
 ```bash
 # build docker image
-git clone https://github.com/NordicPlayground/nrf-docker
+git clone https://github.com/safetrtrieve/nrf-docker
 cd nrf-docker
-docker build -t nrfconnect-sdk --build-arg sdk_nrf_version=v2.9-branch .
+docker build -t ncs-full --build-arg saferetrieve/ncs:v3.1.1 .
 cd ..
 ```
 
@@ -113,7 +100,7 @@ cd ..
 This builds the `hci_uart` sample and stores the `hci_uart.hex` file in the current directory:
 
 ```bash
-docker run --rm nordicplayground/nrfconnect-sdk:v2.9-branch \
+docker run --rm saferetrieve/ncs-full:v3.1.1 \
     -v ${PWD}:/workdir/project \
     west build zephyr/samples/bluetooth/hci_uart -p always -b nrf9160dk_nrf52840 --build-dir /workdir/project/build
 ls -la build/b0/zephyr && cp build/b0/zephyr/zephyr.hex ./hci_uart.hex
@@ -123,7 +110,7 @@ ls -la build/b0/zephyr && cp build/b0/zephyr/zephyr.hex ./hci_uart.hex
 
 ```bash
 # Init and build in Docker
-docker run --rm nordicplayground/nrfconnect-sdk:v2.9-branch \
+docker run --rm saferetrieve/ncs-full:v3.1.1 \
   -v ${PWD}:/workdir/project \
   west build zephyr/samples/bluetooth/peripheral_ht -p always -b nrf52840dk_nrf52840 --build-dir /workdir/project/build
 
@@ -137,14 +124,14 @@ ls -la ./peripheral_ht.hex
 The image comes with [ClangFormat](https://clang.llvm.org/docs/ClangFormat.html) and the [nRF Connect SDK formatting rules](https://github.com/nrfconnect/sdk-nrf/blob/main/.clang-format) so you can run for example
 
 ```bash
-docker run --name nrfconnect-sdk -d nordicplayground/nrfconnect-sdk tail -f /dev/null
+docker run --name ncs-full -d saferetrieve/ncs-full:v3.1.1 tail -f /dev/null
 find ./src -type f -iname \*.h -o -iname \*.c \
     | xargs -I@ /bin/bash -c "\
         tmpfile=\$(mktemp /tmp/clang-formatted.XXXXXX) && \
-        docker exec -i nrfconnect-sdk clang-format < @ > \$tmpfile && \
+        docker exec -i ncs-full clang-format < @ > \$tmpfile && \
         cmp --silent @ \$tmpfile || (mv \$tmpfile @ && echo @ formatted.)"
-docker kill nrfconnect-sdk
-docker rm nrfconnect-sdk
+docker kill ncs
+docker rm ncs
 ```
 
 to format your sources.
@@ -155,15 +142,14 @@ to format your sources.
 ## Interactive usage
 
 ```bash
-docker run -it -v ${PWD}:/workdir/project \
-    nrfconnect-sdk /bin/bash
+docker run -it -v ${PWD}:/workdir/project ncs-full /bin/bash
 ```
 
 Then, inside the container:
 
 ```bash
-cd nrf/applications/asset_tracker_v2
-west build -p always -b nrf9160dk_nrf9160_ns
+cd /workdir/nrf/applications/connectivity_bridge
+west build -p always -b thingy91/nrf52840
 ...
 ```
 
@@ -172,5 +158,5 @@ Meanwhile, outside of the container, you may modify the code and repeat the buil
 Later after closing the container you may re-open it by name to continue where you left off:
 
 ```bash
-docker start -i nrfconnect-sdk
+docker start -i ncs-full
 ```
