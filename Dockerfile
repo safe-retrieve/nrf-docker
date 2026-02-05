@@ -7,11 +7,11 @@ ARG SLIM=0
 
 # Select tag from:
 #   https://github.com/nrfconnect/sdk-nrf/tags
-ARG SDK_NRF_BRANCH=v3.1.1
+ARG SDK_NRF_BRANCH=v2.8.0
 
 # Select branch from output of running 'nrfutil toolchain-manager search'.
 # When this is changed, you also need to change ${TOOLCHAIN_ID} below.
-ARG TOOLCHAIN_VERSION=v3.1.1
+ARG TOOLCHAIN_VERSION=v2.8.0
 
 # Select by examining the download link for the *.tar.gz file for the Linux x86 64 version:
 #   https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools/Download?lang=en#infotabs
@@ -43,14 +43,15 @@ EOT
 # After installation, remove unnecessary files
 ENV NRFUTIL_HOME=/usr/local/share/nrfutil
 # This needs to be updated if ${TOOLCHAIN_VERSION} is changed.
-ARG TOOLCHAIN_ID=b2ecd2435d
+ARG TOOLCHAIN_ID=b81a7cd864
 ENV TOOLCHAIN_PY=/root/ncs/toolchains/${TOOLCHAIN_ID}/usr/local
 
 RUN <<EOT
-    wget -q https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
-    mv nrfutil /usr/local/bin
+    wget --timeout=60 https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil
+    mv nrfutil /usr/local/bin/nrfutil
     chmod +x /usr/local/bin/nrfutil
     nrfutil install toolchain-manager
+    nrfutil toolchain-manager search
     nrfutil toolchain-manager install --ncs-version ${TOOLCHAIN_VERSION}
     nrfutil toolchain-manager list
     # Remove any downloaded files
@@ -124,6 +125,27 @@ RUN <<EOT
         # that are included in the build and must exist.
         find . -type d \( -iname "example*" -o -iname "doc*" \) -prune -exec rm -rf {} +
     fi
+EOT
+
+# Copy the Zephyr patches from the local folder to the container
+COPY zephyr_patches /workdir/zephyr_patches
+
+# Apply patches
+RUN <<EOT
+    cd /workdir/zephyr
+
+    # Setup dummy git config (required by some git commands)
+    git config --global user.email "ci@example.com"
+    git config --global user.name "CI Builder"
+
+    # Iterate through the patch files and apply them
+    for patch in /workdir/zephyr_patches/*.patch; do
+        echo "Applying $patch..."
+        git apply "$patch"
+    done
+
+    # Clean up patches to save space
+    rm -rf /workdir/zephyr_patches
 EOT
 
 # Launch into build environment with the passed arguments
