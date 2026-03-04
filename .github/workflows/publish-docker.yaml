@@ -20,12 +20,6 @@ jobs:
             description: full
             native_board: native_sim
 
-          - SLIM: 1
-            SDK: v2.8.0
-            TOOLCHAIN: v2.8.0
-            description: slim
-            native_board: native_sim
-
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
