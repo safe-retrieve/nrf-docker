@@ -119,7 +119,7 @@ RUN <<EOT
     west update --narrow -o=--depth=1
     if [ "${SLIM}" -ne 0 ]; then
         # Remove large NCS modules that we're not using
-        rm -rf /workdir/modules/lib/matter /workdir/modules/lib/gui
+        rm -rf /workdir/modules/lib/gui
         # Remove documentation and examples.  Samples are kept since that's where
         # the bootloader lives.  Tests are kept since they have some .defconfigs
         # that are included in the build and must exist.
