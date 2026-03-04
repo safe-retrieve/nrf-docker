@@ -9,16 +9,16 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          # We just build the default images (v3.1.1 SDK and v3.1.1 toolchain)
+          # We just build the default images (v2.8.0 SDK and v2.8.0 toolchain)
           - SLIM: 0
-            SDK: v3.1.1
-            TOOLCHAIN: v3.1.1
+            SDK: v2.8.0
+            TOOLCHAIN: v2.8.0
             description: full
             native_board: native_sim
 
           - SLIM: 1
-            SDK: v3.1.1
-            TOOLCHAIN: v3.1.1
+            SDK: v2.8.0
+            TOOLCHAIN: v2.8.0
             description: slim
             native_board: native_sim
 
