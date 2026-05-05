@@ -1,7 +1,7 @@
-From ab245fea059f7bc35eb064b00a007e24695532ef Mon Sep 17 00:00:00 2001
+From 36e6ed0cf2d106b12f737ba5429040df56753f05 Mon Sep 17 00:00:00 2001
 From: Jeff Cooper <repoocaj@gmail.com>
 Date: Fri, 20 Feb 2026 16:47:15 -0600
-Subject: [PATCH 1/2] Allow multiple LittleFS partitions to be defined
+Subject: [PATCH 1/4] Allow multiple LittleFS partitions to be defined
 
 ---
  subsys/fs/littlefs_fs.c | 4 ++--

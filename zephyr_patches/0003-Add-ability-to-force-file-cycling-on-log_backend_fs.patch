@@ -1,14 +1,14 @@
-From d7bb620e3c425a994282ae56766386a2f9f82c93 Mon Sep 17 00:00:00 2001
+From 212e19de52a27cef3e0c4c49853ce5ba77045612 Mon Sep 17 00:00:00 2001
 From: Jeff Cooper <repoocaj@gmail.com>
 Date: Wed, 22 Apr 2026 11:14:52 -0500
-Subject: [PATCH 2/2] Add ability to force file cycling on log_backend_fs
+Subject: [PATCH 3/4] Add ability to force file cycling on log_backend_fs
 
 ---
  subsys/logging/backends/log_backend_fs.c | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
 diff --git a/subsys/logging/backends/log_backend_fs.c b/subsys/logging/backends/log_backend_fs.c
-index 1f977403d65..dbda80ad1c6 100644
+index 0d366900259..91b0b910d83 100644
 --- a/subsys/logging/backends/log_backend_fs.c
 +++ b/subsys/logging/backends/log_backend_fs.c
 @@ -4,6 +4,8 @@
