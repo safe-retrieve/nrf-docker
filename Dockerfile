@@ -114,41 +114,34 @@ EOT
 
 # Prepare image with a ready to use build environment
 SHELL ["nrfutil","toolchain-manager","launch","/bin/bash","--","-c"]
+ARG ZEPHYR_FORK_BRANCH=sky_shepherd
 RUN <<EOT
+    # Initialize and update NCS as normal
     west init -m https://github.com/nrfconnect/sdk-nrf --mr ${SDK_NRF_BRANCH} .
     west update --narrow -o=--depth=1
+
+    # Overwrite the standard Zephyr tree with our fork
+    echo "Swapping Zephyr for Safe Retrieve fork: safe-retrieve/sdk-zephyr (Branch: ${ZEPHYR_FORK_BRANCH})"
+    cd /workdir/zephyr
+    git remote add saferetrieve https://github.com/safe-retrieve/sdk-zephyr.git
+
+    # Fetch only the history we need for the target branch and check it out
+    git fetch --depth=1 saferetrieve ${ZEPHYR_FORK_BRANCH}
+    git checkout FETCH_HEAD
+
+    cd /workdir
+
     if [ "${SLIM}" -ne 0 ]; then
         # Remove large NCS modules that we're not using
         rm -rf /workdir/modules/lib/gui
-        # Remove documentation and examples.  Samples are kept since that's where
-        # the bootloader lives.  Tests are kept since they have some .defconfigs
+        # Remove documentation and examples. Samples are kept since that's where
+        # the bootloader lives. Tests are kept since they have some .defconfigs
         # that are included in the build and must exist.
         find . -type d \( -iname "example*" -o -iname "doc*" \) -prune -exec rm -rf {} +
     fi
 EOT
 
-# Copy the Zephyr patches from the local folder to the container
-COPY zephyr_patches /workdir/zephyr_patches
-
-# Apply patches
-RUN <<EOT
-    cd /workdir/zephyr
-
-    # Setup dummy git config (required by some git commands)
-    git config --global user.email "ci@example.com"
-    git config --global user.name "CI Builder"
-
-    # Iterate through the patch files and apply them
-    for patch in /workdir/zephyr_patches/*.patch; do
-        echo "Applying $patch..."
-        git apply "$patch"
-    done
-
-    # Clean up patches to save space
-    rm -rf /workdir/zephyr_patches
-EOT
-
-# Launch into build environment with the passed arguments
+# Launch into build environment with the passed argument
 # Currently this is not supported in GitHub Actions
 # See https://github.com/actions/runner/issues/1964
 ENTRYPOINT [ "nrfutil", "toolchain-manager", "launch", "/bin/bash", "--", "/root/entry.sh" ]
