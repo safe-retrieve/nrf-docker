@@ -24,11 +24,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 SHELL [ "/bin/bash", "-euxo", "pipefail", "-c" ]
 
 # gcc-multilib make = Host tools for native_sim build
+# gcc-12 g++-12 g++-12-multilib = Host compiler for the unit tests.  Ubuntu 22.04 gives GCC 11 by
+#                 default, and GCC 12 is the first version that supplies the C++ header <expected>.
+#                 The multilib package covers a 32-bit native_sim build.
 # python 3.8 is installed by toolchain manager hence older version of libffi is required
 RUN <<EOT
     apt-get -y update
     apt-get -y upgrade
-    apt-get -y install wget unzip clang-format gcc-multilib make libffi7
+    apt-get -y install wget unzip clang-format gcc-multilib make libffi7 \
+        gcc-12 g++-12 g++-12-multilib
     # Install command line tool to inspect disk usage
     apt-get -y install ncdu
     apt-get -y clean
