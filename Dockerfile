@@ -32,7 +32,7 @@ RUN <<EOT
     apt-get -y update
     apt-get -y upgrade
     apt-get -y install wget unzip clang-format gcc-multilib make libffi7 \
-        gcc-12 g++-12 g++-12-multilib
+        g++ g++-multilib gcc-12 g++-12 g++-12-multilib
     # Install command line tool to inspect disk usage
     apt-get -y install ncdu
     apt-get -y clean
